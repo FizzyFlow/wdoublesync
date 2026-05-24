@@ -1,13 +1,16 @@
-import DoubleSync from 'doublesync';
-import {
-    CDCStore,
-    DoubleSyncSnapshot,
-    DoubleSyncPatch,
-    DoubleSyncDiffPatch,
-    DoubleSyncCompressed,
-    DoubleSyncFormat,
-    DoubleSyncMemoryFolder,
-} from 'doublesync';
+import DoubleSync from '../doublesync/DoubleSync.js';
+import CDCStore from '../doublesync/CDCStore.js';
+import DoubleSyncSnapshot from '../doublesync/DoubleSyncSnapshot.js';
+import DoubleSyncPatch from '../doublesync/DoubleSyncPatch.js';
+import DoubleSyncDiffPatch from '../doublesync/DoubleSyncDiffPatch.js';
+import DoubleSyncCompressed from '../doublesync/DoubleSyncCompressed.js';
+import DoubleSyncFormat from '../doublesync/DoubleSyncFormat.js';
+import { DoubleSyncMemoryFolder } from '../doublesync/DoubleSyncFolder.js';
+
+const SEGMENT_MAGIC = 0x57445347; // WDSG
+const SEGMENT_VERSION = 1;
+const SEGMENT_HEADER_SIZE = 24;
+const DEFAULT_MAX_PATCH_ITEM_BYTES = 8 * 1024 * 1024;
 
 /**
  * Combines EndlessVector (on-chain append-only storage on Sui) with DoubleSync
@@ -46,6 +49,7 @@ export default class WDoubleSync {
      * @param {import('endless_vector').default} params.endlessVector - EndlessVector instance (read or read+write)
      * @param {DoubleSync} [params.sync] - DoubleSync instance; defaults to `new DoubleSync()` if omitted
      * @param {'gzip'|false} [params.compress=false] - wrap patches in a compression envelope before pushing
+     * @param {number} [params.maxPatchItemBytes=8388608] - split larger patch documents across multiple vector items
      */
     constructor(params = {}) {
         if (!params.endlessVector) throw new Error('WDoubleSync: endlessVector is required');
@@ -56,9 +60,11 @@ export default class WDoubleSync {
         this._sync = params.sync || new DoubleSync();
         /** @type {?'gzip'} */
         this._compress = params.compress || null;
+        /** @type {number} */
+        this._maxPatchItemBytes = params.maxPatchItemBytes || DEFAULT_MAX_PATCH_ITEM_BYTES;
 
         /** @type {CDCStore} */
-        this._senderStore = new CDCStore();
+        this._senderStore = new CDCStore({ copyBytes: false });
         /** @type {CDCStore} */
         this._receiverMirror = new CDCStore();
 
@@ -105,7 +111,7 @@ export default class WDoubleSync {
      */
     reInitialize() {
         this._ev.reInitialize();
-        this._senderStore = new CDCStore();
+        this._senderStore = new CDCStore({ copyBytes: false });
         this._receiverMirror = new CDCStore();
         this._lastSnapshot = null;
         this._replayedCount = 0;
@@ -164,13 +170,15 @@ export default class WDoubleSync {
             patchBytes = await DoubleSyncCompressed.encode(patchBytes, this._compress);
         }
 
-        await this._ev.push(patchBytes, params);
+        this._senderStore = this._cloneReceiverMirror();
+        const pushedItems = await this._pushPatchDocument(patchBytes, params);
 
         this._lastSnapshot = newSnapshot;
         for (const { hash, bytes } of newChunks) {
             this._receiverMirror.putWithHash(hash, bytes);
+            this._senderStore.putWithHash(hash, bytes);
         }
-        this._replayedCount++;
+        this._replayedCount += pushedItems;
 
         return { version: this._replayedCount };
     }
@@ -201,12 +209,14 @@ export default class WDoubleSync {
 
         if (end === 0) return new DoubleSyncMemoryFolder('root');
 
-        const store = new CDCStore();
+        const store = new CDCStore({ copyBytes: false });
         const dest = new DoubleSyncMemoryFolder('root');
         let lastSnapshot = null;
 
-        for (let i = 0; i < end; i++) {
-            let patchBytes = await this._ev.at(i);
+        for (let i = 0; i < end;) {
+            const item = await this._readPatchDocument(i, end);
+            let patchBytes = item.patchBytes;
+            i = item.nextIndex;
 
             if (DoubleSyncFormat.isCompressed(patchBytes)) {
                 patchBytes = await DoubleSyncCompressed.decode(patchBytes);
@@ -250,8 +260,10 @@ export default class WDoubleSync {
         // throwaway memory folder is cheap.
         const dest = new DoubleSyncMemoryFolder('_replay');
 
-        for (let i = from; i < to; i++) {
-            let patchBytes = await this._ev.at(i);
+        for (let i = from; i < to;) {
+            const item = await this._readPatchDocument(i, to);
+            let patchBytes = item.patchBytes;
+            i = item.nextIndex;
 
             if (DoubleSyncFormat.isCompressed(patchBytes)) {
                 patchBytes = await DoubleSyncCompressed.decode(patchBytes);
@@ -292,4 +304,94 @@ export default class WDoubleSync {
 
         this._replayedCount = to;
     }
+
+    async _pushPatchDocument(patchBytes, params) {
+        if (!(patchBytes instanceof Uint8Array)) throw new Error('WDoubleSync._pushPatchDocument: patchBytes must be Uint8Array');
+
+        if (!this._maxPatchItemBytes || patchBytes.length <= this._maxPatchItemBytes) {
+            await this._ev.push(patchBytes, params);
+            return 1;
+        }
+
+        const segmentPayloadBytes = Math.max(1, this._maxPatchItemBytes - SEGMENT_HEADER_SIZE);
+        const total = Math.ceil(patchBytes.length / segmentPayloadBytes);
+        for (let index = 0; index < total; index++) {
+            const start = index * segmentPayloadBytes;
+            const payload = patchBytes.subarray(start, Math.min(start + segmentPayloadBytes, patchBytes.length));
+            await this._ev.push(encodeSegment(payload, { index, total, originalLength: patchBytes.length }), params);
+        }
+        return total;
+    }
+
+    async _readPatchDocument(index, end) {
+        const first = await this._ev.at(index);
+        const segment = parseSegment(first);
+        if (!segment) return { patchBytes: first, nextIndex: index + 1 };
+
+        if (segment.index !== 0) {
+            throw new Error(`WDoubleSync: segmented patch at index ${index} starts with segment ${segment.index}`);
+        }
+
+        const parts = new Array(segment.total);
+        parts[0] = segment.payload;
+        let nextIndex = index + 1;
+        for (let expected = 1; expected < segment.total; expected++, nextIndex++) {
+            if (nextIndex >= end) {
+                throw new Error(`WDoubleSync: incomplete segmented patch at index ${index}`);
+            }
+            const nextSegment = parseSegment(await this._ev.at(nextIndex));
+            if (!nextSegment || nextSegment.index !== expected || nextSegment.total !== segment.total || nextSegment.originalLength !== segment.originalLength) {
+                throw new Error(`WDoubleSync: invalid segmented patch segment at index ${nextIndex}`);
+            }
+            parts[expected] = nextSegment.payload;
+        }
+
+        const out = new Uint8Array(segment.originalLength);
+        let cur = 0;
+        for (const part of parts) {
+            out.set(part, cur);
+            cur += part.length;
+        }
+        if (cur !== out.length) throw new Error(`WDoubleSync: segmented patch size mismatch (${cur} != ${out.length})`);
+        return { patchBytes: out, nextIndex };
+    }
+
+    _cloneReceiverMirror() {
+        const store = new CDCStore({ copyBytes: false });
+        for (const hash of this._receiverMirror.hashes()) {
+            const bytes = this._receiverMirror.get(hash);
+            if (bytes) store.putWithHash(hash, bytes);
+        }
+        return store;
+    }
+}
+
+function encodeSegment(payload, { index, total, originalLength }) {
+    const out = new Uint8Array(SEGMENT_HEADER_SIZE + payload.length);
+    const dv = new DataView(out.buffer, out.byteOffset, out.byteLength);
+    dv.setUint32(0, SEGMENT_MAGIC, true);
+    out[4] = SEGMENT_VERSION;
+    dv.setUint32(8, index, true);
+    dv.setUint32(12, total, true);
+    dv.setBigUint64(16, BigInt(originalLength), true);
+    out.set(payload, SEGMENT_HEADER_SIZE);
+    return out;
+}
+
+function parseSegment(bytes) {
+    if (!(bytes instanceof Uint8Array) || bytes.length < SEGMENT_HEADER_SIZE) return null;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (dv.getUint32(0, true) !== SEGMENT_MAGIC || bytes[4] !== SEGMENT_VERSION) return null;
+    const index = dv.getUint32(8, true);
+    const total = dv.getUint32(12, true);
+    const originalLength = Number(dv.getBigUint64(16, true));
+    if (!total || index >= total || !Number.isSafeInteger(originalLength)) {
+        throw new Error('WDoubleSync: invalid segmented patch header');
+    }
+    return {
+        index,
+        total,
+        originalLength,
+        payload: bytes.subarray(SEGMENT_HEADER_SIZE),
+    };
 }
