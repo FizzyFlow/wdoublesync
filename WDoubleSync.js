@@ -248,6 +248,59 @@ export default class WDoubleSync {
     }
 
     /**
+     * Get the Merkle tree hash for a specific version.
+     * Reads backwards from the target to find the nearest full snapshot,
+     * then replays only the diff-patches forward.
+     * Best case (latest is a full snapshot): single read, no replay.
+     *
+     * @param {number} [version] - version to query; defaults to latest
+     * @returns {Promise<Uint8Array>} 32-byte tree hash
+     */
+    async getTreeHash(version) {
+        await this._ev.initialize();
+
+        const total = this._ev.length;
+        const end = (version !== undefined) ? Math.min(version, total) : total;
+        if (end === 0) return new Uint8Array(32);
+
+        const diffPatches = [];
+
+        for (let i = end - 1; i >= 0; i--) {
+            const item = await this._readPatchDocument(i, total);
+            let patchBytes = item.patchBytes;
+
+            if (DoubleSyncFormat.isCompressed(patchBytes)) {
+                patchBytes = await DoubleSyncCompressed.decode(patchBytes);
+            }
+
+            const kind = DoubleSyncFormat.detect(patchBytes);
+
+            if (kind === 'patch') {
+                const parsed = new DoubleSyncPatch(patchBytes);
+                if (diffPatches.length === 0) {
+                    return new DoubleSyncSnapshot(parsed.snapshot).treeHash;
+                }
+                let currentSnapshot = parsed.snapshot;
+                const store = new CDCStore({ copyBytes: false });
+                for (const { hash, bytes } of parsed.chunks()) {
+                    store.putWithHash(hash, bytes);
+                }
+                const dest = new DoubleSyncMemoryFolder('_hash');
+                for (const diffBytes of diffPatches) {
+                    currentSnapshot = await this._sync.applyDiffPatch({
+                        patch: diffBytes, store, dest, prevSnapshot: currentSnapshot,
+                    });
+                }
+                return new DoubleSyncSnapshot(currentSnapshot).treeHash;
+            }
+
+            diffPatches.unshift(patchBytes);
+        }
+
+        return new Uint8Array(32);
+    }
+
+    /**
      * Replay items from the chain into _senderStore and _lastSnapshot so the sender
      * session state is up to date for the next push().
      *
