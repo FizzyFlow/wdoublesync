@@ -21,7 +21,7 @@
   "license": "AGPL-3.0",
   "packageManager": "pnpm@10.16.0",
   "dependencies": {
-    "@fizzyflow/doublesync": "^0.1.0",
+    "@fizzyflow/doublesync": "^0.1.1",
     "@fizzyflow/endless-vector": "^0.0.10"
   },
   "devDependencies": {

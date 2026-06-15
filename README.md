@@ -4,8 +4,8 @@ Folder-tree delta sync on the Sui blockchain.
 
 WDoubleSync combines the power of two. Two libraries walk into a blockchain...
 
-- **EndlessVector** is a scalable append-only `vector<vector<u8>>` on Sui that grows beyond object size limits by automatically splitting data into history segments and offloading large items as Walrus blobs. It has built-in Seal encryption support — all stored data can be AES encrypted with Seal-wrapped keys, so only the vector owner can decrypt. This is advised for any production data.
-- **DoubleSync** is a content-defined chunking engine that splits files at content-determined boundaries so that small edits only affect nearby chunks, deduplicates identical chunks by SHA-256, fingerprints folder trees as Merkle trees for fast skip of unchanged subtrees, and produces compact incremental diff patches that carry only the changed operations and chunks. 
+- **[EndlessVector](https://github.com/fizzyFlow/endless_vector)** is a scalable append-only `vector<vector<u8>>` on Sui that grows beyond object size limits by automatically splitting data into history segments and offloading large items as Walrus blobs. It has built-in Seal encryption support — all stored data can be AES encrypted with Seal-wrapped keys, so only the vector owner can decrypt. This is advised for any production data.
+- **[DoubleSync](https://github.com/FizzyFlow/doublesync)** is a content-defined chunking engine that splits files at content-determined boundaries so that small edits only affect nearby chunks, deduplicates identical chunks by SHA-256, fingerprints folder trees as Merkle trees for fast skip of unchanged subtrees, and produces compact incremental diff patches that carry only the changed operations and chunks.
 
 Together: DoubleSync builds snapshot and diff patch documents from a folder tree, and EndlessVector stores them as an ordered chain of items on Sui, giving you versioned, deduplicated, incrementally-updated folder sync on the blockchain. Both libraries work and are tested in Node.js and in the browser, and have abstract filesystem interfaces that can be backed by anything — real disk, in-memory, or any custom state layer.
 
@@ -41,7 +41,7 @@ EndlessVector handles all on-chain size constraints automatically (history/archi
 ## Install
 
 ```bash
-pnpm add wdoublesync
+pnpm add @fizzyflow/wdoublesync
 ```
 
 ## Usage
@@ -145,6 +145,10 @@ Number of patch versions stored on chain.
 
 Raw patch bytes at the given chain index.
 
+### `getTreeHash(version?): Promise<Uint8Array>`
+
+Returns the 32-byte Merkle tree hash for the given version (defaults to latest). Reads backwards to find the nearest full snapshot, then replays only the diff-patches forward — best case is a single read with no replay.
+
 ### `reInitialize()`
 
 Force full state reset. Next `initialize()` replays the chain from scratch.
@@ -161,5 +165,5 @@ Requires the `seal_walrus_localnet` setup at `../seal_walrus_localnet/` and the 
 
 ## Dependencies
 
-- [doublesync](https://github.com/FizzyFlow/doublesync) — CDC chunking, snapshot/patch encoding, folder-tree diff
+- [@fizzyflow/doublesync](https://github.com/fizzyFlow/doublesync) — CDC chunking, snapshot/patch encoding, folder-tree diff
 - [endless_vector](https://github.com/fizzyFlow/endless_vector) — on-chain append-only vector with auto history/archive/Walrus management
