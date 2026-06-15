@@ -11,6 +11,8 @@ Together: DoubleSync builds snapshot and diff patch documents from a folder tree
 
 **TL;DR:** git-like filesystem/folder versioning on Sui(+Walrus+Seal).
 
+**Try it:** [doublesync.wal.app](https://doublesync.wal.app/) — live demo dApp · [wdoublesync_cli](https://github.com/FizzyFlow/wdoublesync_cli) — CLI tool
+
 Both libraries are fully standalone and can be used independently of each other and without WDoubleSync. EndlessVector works as general-purpose scalable on-chain storage for any `vector<u8>` data, and DoubleSync works as a pure CDC diff engine for any folder sync scenario — network, disk, database, cloud, any abstraction and whatever transport you want.
 
 ## Overview
