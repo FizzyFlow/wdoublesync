@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
-      doublesync:
-        specifier: file:../doublesync
-        version: file:../doublesync
-      endless_vector:
-        specifier: file:../endless_vector/js
-        version: '@fizzyflow/endless-vector@file:../endless_vector/js(@mysten/sui@2.17.0(typescript@6.0.3))'
+      '@fizzyflow/doublesync':
+        specifier: ^0.1.0
+        version: 0.1.0
+      '@fizzyflow/endless-vector':
+        specifier: ^0.0.10
+        version: 0.0.10(@mysten/sui@2.17.0(typescript@6.0.3))
     devDependencies:
       '@mysten/seal':
         specifier: ^1.1.3
@@ -56,10 +56,13 @@ packages:
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
-  '@fizzyflow/endless-vector@file:../endless_vector/js':
-    resolution: {directory: ../endless_vector/js, type: directory}
+  '@fizzyflow/doublesync@0.1.0':
+    resolution: {integrity: sha512-k7owdaZOd0FbB0ynawMOtBibswSFzEzau/6jppVJv5Q47xxC+KQNn5MdTTUen3QOPW6BZVecbdghLzQKyAAldQ==}
+
+  '@fizzyflow/endless-vector@0.0.10':
+    resolution: {integrity: sha512-h7dEouG4B8/4K0SX7FyXd2zxxors7gXnWNgs/AOMGchT80iyPqRaAn2OloCmEJT+5AcGCocmGUlU6G4aeff37w==}
     peerDependencies:
-      '@mysten/sui': ^1.45.0
+      '@mysten/sui': ^2.16.0
 
   '@gql.tada/cli-utils@1.7.3':
     resolution: {integrity: sha512-3iQY5E/jvv3Lnh6D1Mh7zr+Bb9C/TGk1DHkm+lbIjQBnZAu2m+BcTcr1e3spUt6Aa6HG/xAN2XxpbWw9oZALEg==}
@@ -342,9 +345,6 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
-
-  doublesync@file:../doublesync:
-    resolution: {directory: ../doublesync, type: directory}
 
   es-module-lexer@2.1.0:
     resolution: {integrity: sha512-n27zTYMjYu1aj4MjCWzSP7G9r75utsaoc8m61weK+W8JMBGGQybd43GstCXZ3WNmSFtGT9wi59qQTW6mhTR5LQ==}
@@ -648,7 +648,11 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@fizzyflow/endless-vector@file:../endless_vector/js(@mysten/sui@2.17.0(typescript@6.0.3))':
+  '@fizzyflow/doublesync@0.1.0':
+    dependencies:
+      '@noble/hashes': 2.2.0
+
+  '@fizzyflow/endless-vector@0.0.10(@mysten/sui@2.17.0(typescript@6.0.3))':
     dependencies:
       '@mysten/sui': 2.17.0(typescript@6.0.3)
 
@@ -909,10 +913,6 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   detect-libc@2.1.2: {}
-
-  doublesync@file:../doublesync:
-    dependencies:
-      '@noble/hashes': 2.2.0
 
   es-module-lexer@2.1.0: {}
 

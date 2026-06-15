@@ -8,13 +8,13 @@
  */
 
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
-import { EndlessVector } from 'endless_vector';
+import { EndlessVector } from '@fizzyflow/endless-vector';
 import {
     DoubleSync,
     DoubleSyncMemoryFolder,
     DoubleSyncFormat,
     DoubleSyncDiffPatch,
-} from 'doublesync';
+} from '@fizzyflow/doublesync';
 import WDoubleSync from '../WDoubleSync.js';
 import { equalUint8Arrays, randomBytesOfLength, seededBytes, collectTree, treesEqual } from './helpers.js';
 import { setupLocalnet, teardownLocalnet } from './fixture.js';

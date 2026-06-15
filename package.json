@@ -1,6 +1,6 @@
 {
-  "name": "wdoublesync",
-  "version": "0.1.0",
+  "name": "@fizzyflow/wdoublesync",
+  "version": "0.1.1",
   "type": "module",
   "description": "Combines EndlessVector (on-chain Sui storage) with DoubleSync (CDC delta sync) to store and replay folder-tree snapshots on-chain.",
   "main": "./index.js",
@@ -10,16 +10,19 @@
       "default": "./index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run ./test/*.test.js"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "suidouble (https://github.com/suidouble)",
+  "license": "AGPL-3.0",
   "packageManager": "pnpm@10.16.0",
   "dependencies": {
-    "doublesync": "file:../doublesync",
-    "endless_vector": "file:../endless_vector/js"
+    "@fizzyflow/doublesync": "^0.1.0",
+    "@fizzyflow/endless-vector": "^0.0.10"
   },
   "devDependencies": {
     "@mysten/seal": "^1.1.3",

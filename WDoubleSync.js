@@ -1,11 +1,13 @@
-import DoubleSync from '../doublesync/DoubleSync.js';
-import CDCStore from '../doublesync/CDCStore.js';
-import DoubleSyncSnapshot from '../doublesync/DoubleSyncSnapshot.js';
-import DoubleSyncPatch from '../doublesync/DoubleSyncPatch.js';
-import DoubleSyncDiffPatch from '../doublesync/DoubleSyncDiffPatch.js';
-import DoubleSyncCompressed from '../doublesync/DoubleSyncCompressed.js';
-import DoubleSyncFormat from '../doublesync/DoubleSyncFormat.js';
-import { DoubleSyncMemoryFolder } from '../doublesync/DoubleSyncFolder.js';
+import {
+    DoubleSync,
+    CDCStore,
+    DoubleSyncSnapshot,
+    DoubleSyncPatch,
+    DoubleSyncDiffPatch,
+    DoubleSyncCompressed,
+    DoubleSyncFormat,
+    DoubleSyncMemoryFolder,
+} from '@fizzyflow/doublesync';
 
 const SEGMENT_MAGIC = 0x57445347; // WDSG
 const SEGMENT_VERSION = 1;

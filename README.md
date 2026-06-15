@@ -49,9 +49,9 @@ pnpm add wdoublesync
 ### Sender: push folder state to chain
 
 ```js
-import EndlessVector from 'endless_vector';
-import { DoubleSync, DoubleSyncMemoryFolder } from 'doublesync';
-import WDoubleSync from 'wdoublesync';
+import EndlessVector from '@fizzyflow/endless-vector';
+import { DoubleSync, DoubleSyncMemoryFolder } from '@fizzyflow/doublesync';
+import WDoubleSync from '@fizzyflow/wdoublesync';
 
 const ev = new EndlessVector({
     suiClient,
@@ -161,5 +161,5 @@ Requires the `seal_walrus_localnet` setup at `../seal_walrus_localnet/` and the 
 
 ## Dependencies
 
-- [doublesync](../doublesync/) — CDC chunking, snapshot/patch encoding, folder-tree diff
+- [doublesync](https://github.com/FizzyFlow/doublesync) — CDC chunking, snapshot/patch encoding, folder-tree diff
 - [endless_vector](https://github.com/fizzyFlow/endless_vector) — on-chain append-only vector with auto history/archive/Walrus management

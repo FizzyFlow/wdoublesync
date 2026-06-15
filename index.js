@@ -24,4 +24,4 @@ export {
     MAGICS,
     diffSnapshots,
     DoubleSyncSession,
-} from 'doublesync';
+} from '@fizzyflow/doublesync';

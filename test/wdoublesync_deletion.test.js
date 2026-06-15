@@ -1,9 +1,9 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
-import { EndlessVector } from 'endless_vector';
+import { EndlessVector } from '@fizzyflow/endless-vector';
 import {
     DoubleSync,
     DoubleSyncMemoryFolder,
-} from 'doublesync';
+} from '@fizzyflow/doublesync';
 import WDoubleSync from '../WDoubleSync.js';
 import { equalUint8Arrays, seededBytes, collectTree } from './helpers.js';
 import { setupLocalnet, teardownLocalnet } from './fixture.js';
