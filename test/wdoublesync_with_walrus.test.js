@@ -337,6 +337,64 @@ describe('mixed large and small files across versions', () => {
     }, TX_TIMEOUT * 4);
 });
 
+// ─── ensure_length guard ─────────────────────────────────────────────────────
+
+describe('ensure_length guard with large payloads', () => {
+    it('sequential pushes of large files all succeed (blob path length tracking)', async () => {
+        // Each push routes through EndlessVector.push() → walrus.pushBlob().
+        // The ensure_length guard requires ev.length to be incremented after each
+        // blob push so the next push uses the correct expectedLength.
+        const ev = await createEV();
+        const sync = makeSync();
+        const w = new WDoubleSync({ endlessVector: ev, sync });
+
+        const sender = new DoubleSyncMemoryFolder('proj');
+        await sender.addFile('large.bin', randomBytesOfLength(200 * 1024));
+
+        await w.initialize();
+        await w.push(sender);   // push 1
+
+        const large = await sender.findByPath(['large.bin']);
+        await large.setContent(randomBytesOfLength(200 * 1024));
+        await w.push(sender);   // push 2
+
+        await large.setContent(randomBytesOfLength(200 * 1024));
+        await w.push(sender);   // push 3
+
+        await ev.reInitialize();
+        await ev.initialize();
+        expect(ev.length).toBe(3);
+    }, TX_TIMEOUT * 3);
+
+    it('stale WDoubleSync instance is rejected when another instance has pushed', async () => {
+        // w1 and w2 both initialize against the same empty vector (ev.length = 0).
+        // w1 pushes a large file → on-chain length advances.
+        // w2 is already initialized (_isInitialized = true) so it skips re-fetching;
+        // its ev.length is still 0. When it tries to push, ensure_length fires → abort.
+        const ev1 = await createEV();
+        const ev2 = makeEV(ev1.id);
+
+        const folder = new DoubleSyncMemoryFolder('proj');
+        await folder.addFile('large.bin', randomBytesOfLength(200 * 1024));
+
+        const w1 = new WDoubleSync({ endlessVector: ev1, sync: makeSync() });
+        const w2 = new WDoubleSync({ endlessVector: ev2, sync: makeSync() });
+
+        await w1.initialize();   // ev1.length = 0, w1._isInitialized = true
+        await w2.initialize();   // ev2.length = 0, w2._isInitialized = true
+
+        await w1.push(folder);   // advances on-chain length; ev1.length updated
+
+        // w2 skips initialize() (already initialized), uses stale ev2.length = 0.
+        await expect(w2.push(folder)).rejects.toThrow();
+
+        // On-chain length must reflect only w1's push.
+        await ev1.reInitialize();
+        await ev1.initialize();
+        expect(ev1.length).toBe(1);
+    }, TX_TIMEOUT * 2);
+});
+
 // ─── compressed large payloads ───────────────────────────────────────────────
 
 describe('compressed large payloads', () => {
