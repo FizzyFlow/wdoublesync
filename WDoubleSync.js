@@ -211,9 +211,10 @@ export default class WDoubleSync {
 
         if (end === 0) return new DoubleSyncMemoryFolder('root');
 
-        const store = new CDCStore({ copyBytes: false });
-        const dest = new DoubleSyncMemoryFolder('root');
+        let store = new CDCStore({ copyBytes: false });
+        let dest = new DoubleSyncMemoryFolder('root');
         let lastSnapshot = null;
+        let invalidState = false;
 
         for (let i = 0; i < end;) {
             const item = await this._readPatchDocument(i, end);
@@ -227,23 +228,40 @@ export default class WDoubleSync {
             const kind = DoubleSyncFormat.detect(patchBytes);
 
             if (kind === 'patch') {
+                // Full snapshot — reset all state and use this as the new baseline.
+                // This makes full snapshots act as recovery points: corrupt diffs
+                // before this index are skipped.
+                store = new CDCStore({ copyBytes: false });
+                dest = new DoubleSyncMemoryFolder('root');
                 await this._sync.applyPatch({ patch: patchBytes, store, dest });
                 const parsed = new DoubleSyncPatch(patchBytes);
                 lastSnapshot = parsed.snapshot.slice();
+                invalidState = false;
             } else if (kind === 'diff-patch') {
-                if (!lastSnapshot) {
-                    throw new Error(`WDoubleSync.restore: diff-patch at index ${i} but no prior snapshot`);
+                if (invalidState || !lastSnapshot) {
+                    // In invalid state — skip this diff and wait for the next full snapshot.
+                    continue;
                 }
-                const newSnapshot = await this._sync.applyDiffPatch({
-                    patch: patchBytes,
-                    store,
-                    dest,
-                    prevSnapshot: lastSnapshot,
-                });
-                lastSnapshot = newSnapshot;
+                try {
+                    const newSnapshot = await this._sync.applyDiffPatch({
+                        patch: patchBytes,
+                        store,
+                        dest,
+                        prevSnapshot: lastSnapshot,
+                    });
+                    lastSnapshot = newSnapshot;
+                } catch (_err) {
+                    // Corrupt diff — enter invalid state and wait for next full snapshot.
+                    invalidState = true;
+                    lastSnapshot = null;
+                }
             } else {
                 throw new Error(`WDoubleSync.restore: unknown patch type at index ${i}`);
             }
+        }
+
+        if (invalidState) {
+            throw new Error('WDoubleSync.restore: chain ends in corrupt state with no recovery snapshot; push a full snapshot to repair');
         }
 
         return dest;
@@ -310,10 +328,8 @@ export default class WDoubleSync {
      * @param {number} to - exclusive end index
      */
     async _replayRange(from, to) {
-        // We need a temporary dest to drive applyPatch / applyDiffPatch, but we only
-        // care about the CDCStore and snapshot state — not the folder contents. A
-        // throwaway memory folder is cheap.
         const dest = new DoubleSyncMemoryFolder('_replay');
+        let invalidState = false;
 
         for (let i = from; i < to;) {
             const item = await this._readPatchDocument(i, to);
@@ -327,34 +343,43 @@ export default class WDoubleSync {
             const kind = DoubleSyncFormat.detect(patchBytes);
 
             if (kind === 'patch') {
+                // Full snapshot — reset sender state so subsequent diffs build on top of this.
+                this._senderStore = new CDCStore({ copyBytes: false });
+                this._receiverMirror = new CDCStore();
                 await this._sync.applyPatch({ patch: patchBytes, store: this._senderStore, dest });
-
                 const parsed = new DoubleSyncPatch(patchBytes);
                 this._lastSnapshot = parsed.snapshot.slice();
-
-                // Receiver mirror: after a full patch, receiver has all embedded chunks
                 for (const { hash, bytes } of parsed.chunks()) {
                     this._receiverMirror.putWithHash(hash, bytes);
                 }
+                invalidState = false;
             } else if (kind === 'diff-patch') {
-                if (!this._lastSnapshot) {
-                    throw new Error(`WDoubleSync._replayRange: diff-patch at index ${i} but no prior snapshot`);
+                if (invalidState || !this._lastSnapshot) {
+                    continue;
                 }
-                const newSnapshot = await this._sync.applyDiffPatch({
-                    patch: patchBytes,
-                    store: this._senderStore,
-                    dest,
-                    prevSnapshot: this._lastSnapshot,
-                });
-                this._lastSnapshot = newSnapshot;
-
-                const parsedDiff = new DoubleSyncDiffPatch(patchBytes);
-                for (const { hash, bytes } of parsedDiff.chunks()) {
-                    this._receiverMirror.putWithHash(hash, bytes);
+                try {
+                    const newSnapshot = await this._sync.applyDiffPatch({
+                        patch: patchBytes,
+                        store: this._senderStore,
+                        dest,
+                        prevSnapshot: this._lastSnapshot,
+                    });
+                    this._lastSnapshot = newSnapshot;
+                    const parsedDiff = new DoubleSyncDiffPatch(patchBytes);
+                    for (const { hash, bytes } of parsedDiff.chunks()) {
+                        this._receiverMirror.putWithHash(hash, bytes);
+                    }
+                } catch (_err) {
+                    invalidState = true;
+                    this._lastSnapshot = null;
                 }
             } else {
                 throw new Error(`WDoubleSync._replayRange: unknown patch type at index ${i}`);
             }
+        }
+
+        if (invalidState) {
+            throw new Error('WDoubleSync._replayRange: chain ends in corrupt state with no recovery snapshot');
         }
 
         this._replayedCount = to;

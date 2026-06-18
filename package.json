@@ -1,6 +1,6 @@
 {
   "name": "@fizzyflow/wdoublesync",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Combines EndlessVector (on-chain Sui storage) with DoubleSync (CDC delta sync) to store and replay folder-tree snapshots on-chain.",
   "main": "./index.js",
