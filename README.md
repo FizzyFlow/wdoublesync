@@ -39,6 +39,7 @@ EndlessVector handles all on-chain size constraints automatically (history/archi
 - **Compression**: Optional gzip envelope to reduce on-chain storage cost
 - **Stateless resume**: A new sender instance rebuilds its CDC store and session state by replaying existing chain items — no local state required between sessions
 - **Transparent blob routing**: Large patches are automatically stored as Walrus blobs by EndlessVector
+- **Corrupt chain recovery**: If a diff patch on-chain is unreadable (e.g. pushed against a stale base), `restore()` and `initialize()` skip it and reset at the next full snapshot further down the chain, rather than throwing. If no recovery snapshot exists, an error is thrown — repair with a force snapshot (see below)
 
 ## Install
 
@@ -139,6 +140,8 @@ Build the next patch from `root` and push it to the EndlessVector. Auto-initiali
 
 Reconstruct the folder tree by replaying patches from the chain. Defaults to latest version.
 
+If a corrupt diff patch is encountered during replay, it is skipped and state is reset at the next full snapshot found further along the chain. If the chain ends in corrupt state with no recovery snapshot, an error is thrown with `'corrupt state'` in the message.
+
 ### `length(): Promise<number>`
 
 Number of patch versions stored on chain.
@@ -154,6 +157,25 @@ Returns the 32-byte Merkle tree hash for the given version (defaults to latest).
 ### `reInitialize()`
 
 Force full state reset. Next `initialize()` replays the chain from scratch.
+
+## Repairing a corrupt chain
+
+If a diff patch was pushed against a stale base (e.g. a race condition or watch-command bug), `restore()` will throw because the chain ends in corrupt state with no recovery snapshot. Fix it by pushing a new full snapshot at the current chain tip:
+
+```js
+// w is a WDoubleSync instance on the corrupt EndlessVector
+const ev = w._ev;
+await ev.initialize();
+
+// Bypass chain replay — push a clean full snapshot directly
+w._isInitialized = true;
+w._lastSnapshot = null;
+w._replayedCount = ev.length;
+
+await w.push(currentFolder);  // pushes full snapshot, not a diff
+```
+
+After this, `restore()` will skip the corrupt diff and recover from the new full snapshot. Subsequent pushes produce normal diffs again.
 
 ## Testing
 
