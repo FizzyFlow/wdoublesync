@@ -93,12 +93,23 @@ export default class WDoubleSync {
      * by replaying every existing item from the chain.
      *
      * Safe to call multiple times — skips items already replayed.
+     * Handles burned archives by starting from the first non-burned item.
      * @returns {Promise<void>}
      */
     async initialize() {
         await this._ev.initialize();
 
         const total = this._ev.length;
+        const burnedArchiveCount = this._ev.burnedArchiveCount || 0;
+
+        // If archives have been burned, reset replay state to start from the first non-burned item
+        // This ensures we don't try to access burned indices
+        if (burnedArchiveCount > 0 && this._replayedCount < burnedArchiveCount) {
+            this._senderStore = new CDCStore({ copyBytes: false });
+            this._receiverMirror = new CDCStore();
+            this._lastSnapshot = null;
+            this._replayedCount = burnedArchiveCount;
+        }
 
         // Replay items we haven't seen yet
         if (this._replayedCount < total) {
@@ -216,8 +227,25 @@ export default class WDoubleSync {
         let lastSnapshot = null;
         let invalidState = false;
 
-        for (let i = 0; i < end;) {
-            const item = await this._readPatchDocument(i, end);
+        // Skip burned archives when restoring
+        const burnedArchiveCount = this._ev.burnedArchiveCount || 0;
+        const startIndex = Math.max(0, burnedArchiveCount);
+
+        for (let i = startIndex; i < end;) {
+            let item;
+            try {
+                item = await this._readPatchDocument(i, end);
+            } catch (err) {
+                // Skip indices that are inaccessible: burned archives, decryption failures, etc.
+                if (err.message?.includes('out of range') ||
+                    err.message?.includes('burned') ||
+                    err.message?.includes('ghash') ||
+                    err.message?.includes('decrypt')) {
+                    i++;
+                    continue;
+                }
+                throw err;
+            }
             let patchBytes = item.patchBytes;
             i = item.nextIndex;
 
@@ -233,8 +261,15 @@ export default class WDoubleSync {
                 // before this index are skipped.
                 store = new CDCStore({ copyBytes: false });
                 dest = new DoubleSyncMemoryFolder('root');
-                await this._sync.applyPatch({ patch: patchBytes, store, dest });
+
+                // Extract chunks from patch and add to store before applying
                 const parsed = new DoubleSyncPatch(patchBytes);
+                const chunks = Array.from(parsed.chunks());
+                for (const { hash, bytes } of chunks) {
+                    store.putWithHash(hash, bytes);
+                }
+
+                await this._sync.applyPatch({ patch: patchBytes, store, dest });
                 lastSnapshot = parsed.snapshot.slice();
                 invalidState = false;
             } else if (kind === 'diff-patch') {
@@ -243,6 +278,12 @@ export default class WDoubleSync {
                     continue;
                 }
                 try {
+                    // Extract chunks from patch and add to store before applying
+                    const parsedDiff = new DoubleSyncDiffPatch(patchBytes);
+                    for (const { hash, bytes } of parsedDiff.chunks()) {
+                        store.putWithHash(hash, bytes);
+                    }
+
                     const newSnapshot = await this._sync.applyDiffPatch({
                         patch: patchBytes,
                         store,
@@ -286,7 +327,19 @@ export default class WDoubleSync {
         const diffPatches = [];
 
         for (let i = end - 1; i >= 0; i--) {
-            const item = await this._readPatchDocument(i, total);
+            let item;
+            try {
+                item = await this._readPatchDocument(i, total);
+            } catch (err) {
+                // Skip indices that are inaccessible: burned archives, decryption failures, etc.
+                if (err.message?.includes('out of range') ||
+                    err.message?.includes('burned') ||
+                    err.message?.includes('ghash') ||
+                    err.message?.includes('decrypt')) {
+                    continue;
+                }
+                throw err;
+            }
             let patchBytes = item.patchBytes;
 
             if (DoubleSyncFormat.isCompressed(patchBytes)) {
@@ -332,7 +385,20 @@ export default class WDoubleSync {
         let invalidState = false;
 
         for (let i = from; i < to;) {
-            const item = await this._readPatchDocument(i, to);
+            let item;
+            try {
+                item = await this._readPatchDocument(i, to);
+            } catch (err) {
+                // Skip indices that are inaccessible: burned archives, decryption failures, etc.
+                if (err.message?.includes('out of range') ||
+                    err.message?.includes('burned') ||
+                    err.message?.includes('ghash') ||
+                    err.message?.includes('decrypt')) {
+                    i++;
+                    continue;
+                }
+                throw err;
+            }
             let patchBytes = item.patchBytes;
             i = item.nextIndex;
 
