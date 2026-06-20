@@ -2,7 +2,9 @@
 
 Folder-tree delta sync on the Sui blockchain.
 
-WDoubleSync combines the power of two. Two libraries walk into a blockchain...
+**Take a quick look:** [demo video](https://www.youtube.com/watch?v=RaEdLQAPrQU) — a quick walkthrough with screen actions · [slides](https://docs.google.com/presentation/d/1k13N3XZ-8Dpb6kx-ztTCp8iVD5_wlmeHciB9-iSs6EE) — a structured project overview.
+
+**WDoubleSync** combines the power of two. Two libraries walk into a blockchain...
 
 - **[EndlessVector](https://github.com/fizzyFlow/endless_vector)** is a scalable append-only `vector<vector<u8>>` on Sui that grows beyond object size limits by automatically splitting data into history segments and offloading large items as Walrus blobs. It has built-in Seal encryption support — all stored data can be AES encrypted with Seal-wrapped keys, so only the vector owner can decrypt. This is advised for any production data.
 - **[DoubleSync](https://github.com/FizzyFlow/doublesync)** is a content-defined chunking engine that splits files at content-determined boundaries so that small edits only affect nearby chunks, deduplicates identical chunks by SHA-256, fingerprints folder trees as Merkle trees for fast skip of unchanged subtrees, and produces compact incremental diff patches that carry only the changed operations and chunks.
