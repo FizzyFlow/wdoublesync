@@ -2,7 +2,7 @@
 
 Folder-tree delta sync on the Sui blockchain.
 
-**Take a quick look:** [demo video](https://www.youtube.com/watch?v=RaEdLQAPrQU) — a quick walkthrough with screen actions · [slides](https://docs.google.com/presentation/d/1k13N3XZ-8Dpb6kx-ztTCp8iVD5_wlmeHciB9-iSs6EE) — a structured project overview.
+**Take a quick look:** [demo video](https://www.youtube.com/watch?v=XroBaYYnET8) — a quick walkthrough with screen actions · [slides](https://docs.google.com/presentation/d/1k13N3XZ-8Dpb6kx-ztTCp8iVD5_wlmeHciB9-iSs6EE) — a structured project overview.
 
 **WDoubleSync** combines the power of two. Two libraries walk into a blockchain...
 
