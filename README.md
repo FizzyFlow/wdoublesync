@@ -15,6 +15,10 @@ Together: DoubleSync builds snapshot and diff patch documents from a folder tree
 
 **Try it:** [doublesync.wal.app](https://doublesync.wal.app/) — live demo dApp · [wdoublesync_cli](https://github.com/FizzyFlow/wdoublesync_cli) — CLI tool
 
+**[AI Agent Skill](https://github.com/FizzyFlow/wdoublesync_cli/blob/main/SKILL.md)** — a ready-made skill that teaches AI coding agents to use wdoublesync autonomously: push project snapshots to on-chain storage, pull and inspect past versions, run rebate to compact history, or watch a folder for continuous sync — all without hand-holding on commands or flags. The skill also covers how to combine wdoublesync with [MemWal](https://github.com/MystenLabs/MemWal) for agent memory workflows.
+
+
+
 Both libraries are fully standalone and can be used independently of each other and without WDoubleSync. EndlessVector works as general-purpose scalable on-chain storage for any `vector<u8>` data, and DoubleSync works as a pure CDC diff engine for any folder sync scenario — network, disk, database, cloud, any abstraction and whatever transport you want.
 
 ## Overview
